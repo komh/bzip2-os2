@@ -110,7 +110,7 @@
         } while ( 0 )
 #   endif
 
-#   ifdef __CYGWIN__
+#   if defined(__CYGWIN__) || defined(__KLIBC__)
 #     include <io.h>
 #     include <fcntl.h>
 #     undef SET_BINARY_MODE

@@ -89,6 +89,9 @@ typedef
 #   define BZ_API(func) (WINAPI * func)
 #   define BZ_EXTERN
 #   endif
+#elif defined(__KLIBC__)
+#   define BZ_API(func) _System func
+#   define BZ_EXTERN extern
 #else
 #   define BZ_API(func) func
 #   define BZ_EXTERN extern

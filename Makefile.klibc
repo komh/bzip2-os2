@@ -1,0 +1,286 @@
+# ------------------------------------------------------------------
+# This file is part of bzip2/libbzip2, a program and library for
+# lossless, block-sorting data compression.
+#
+# bzip2/libbzip2 version 1.0.6 of 6 September 2010
+# Copyright (C) 1996-2010 Julian Seward <jseward@bzip.org>
+# Copyright (C) 2017 KO Myung-Hun <komh@chollian.net>
+#
+# Please read the WARNING, DISCLAIMER and PATENTS sections in the
+# README file.
+#
+# This program is released under the terms of the license contained
+# in the file LICENSE.
+# ------------------------------------------------------------------
+
+SHELL=sh.exe
+
+# To assist in cross-compiling
+CC=gcc
+AR=ar
+RANLIB=echo ignore ranlib
+LDFLAGS=-Zargs-wild -Zargs-resp -Zhigh-mem
+
+BIGFILES=-D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -Winline -O2 -g $(BIGFILES)
+
+EXEEXT=.exe
+LN_S=cp -p
+
+BZ2DLL=bz21.dll
+
+# Where you want it installed when you do 'make install'
+PREFIX=/usr/local
+
+OBJS= blocksort.o  \
+      huffman.o    \
+      crctable.o   \
+      randtable.o  \
+      compress.o   \
+      decompress.o \
+      bzlib.o
+
+all: libbz2.a $(BZ2DLL) bzip2$(EXEEXT) bzip2recover$(EXEEXT) test
+
+bzip2$(EXEEXT): libbz2.a bzip2.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o bzip2$(EXEEXT) bzip2.o libbz2.a
+
+bzip2recover$(EXEEXT): bzip2recover.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o bzip2recover$(EXEEXT) bzip2recover.o
+
+libbz2.a: $(OBJS)
+	rm -f libbz2.a
+	$(AR) cq libbz2.a $(OBJS)
+
+$(BZ2DLL): libbz2.a
+	sed -e 1,3d -e 's/\t//g' < libbz2.def > libbz2.exp
+	kdllar -cc $(CC) -implib libbz2_dll.a -symfile libbz2.exp -nokeepdef $(CFLAGS) $(LDFLAGS) -o $(BZ2DLL) $(OBJS)
+
+check: test
+test: bzip2$(EXEEXT)
+	@cat words1
+	./bzip2 -1  < sample1.ref > sample1.rb2
+	./bzip2 -2  < sample2.ref > sample2.rb2
+	./bzip2 -3  < sample3.ref > sample3.rb2
+	./bzip2 -d  < sample1.bz2 > sample1.tst
+	./bzip2 -d  < sample2.bz2 > sample2.tst
+	./bzip2 -ds < sample3.bz2 > sample3.tst
+	cmp sample1.bz2 sample1.rb2
+	cmp sample2.bz2 sample2.rb2
+	cmp sample3.bz2 sample3.rb2
+	cmp sample1.tst sample1.ref
+	cmp sample2.tst sample2.ref
+	cmp sample3.tst sample3.ref
+	@cat words3
+
+install: bzip2$(EXEEXT) bzip2recover$(EXEEXT)
+	if ( test ! -d $(PREFIX)/bin ) ; then mkdir -p $(PREFIX)/bin ; fi
+	if ( test ! -d $(PREFIX)/lib ) ; then mkdir -p $(PREFIX)/lib ; fi
+	if ( test ! -d $(PREFIX)/man ) ; then mkdir -p $(PREFIX)/man ; fi
+	if ( test ! -d $(PREFIX)/man/man1 ) ; then mkdir -p $(PREFIX)/man/man1 ; fi
+	if ( test ! -d $(PREFIX)/include ) ; then mkdir -p $(PREFIX)/include ; fi
+	cp -f bzip2$(EXEEXT) $(PREFIX)/bin/bzip2$(EXEEXT)
+	cp -f bzip2$(EXEEXT) $(PREFIX)/bin/bunzip2$(EXEEXT)
+	cp -f bzip2$(EXEEXT) $(PREFIX)/bin/bzcat$(EXEEXT)
+	cp -f bzip2recover$(EXEEXT) $(PREFIX)/bin/bzip2recover$(EXEEXT)
+	chmod a+x $(PREFIX)/bin/bzip2$(EXEEXT)
+	chmod a+x $(PREFIX)/bin/bunzip2$(EXEEXT)
+	chmod a+x $(PREFIX)/bin/bzcat$(EXEEXT)
+	chmod a+x $(PREFIX)/bin/bzip2recover$(EXEEXT)
+	cp -f bzip2.1 $(PREFIX)/man/man1
+	chmod a+r $(PREFIX)/man/man1/bzip2.1
+	cp -f bzlib.h $(PREFIX)/include
+	chmod a+r $(PREFIX)/include/bzlib.h
+	cp -f libbz2.a $(PREFIX)/lib
+	chmod a+r $(PREFIX)/lib/libbz2.a
+	cp -f $(BZ2DLL) $(PREFIX)/lib
+	chmod a+r $(PREFIX)/lib/$(BZ2DLL)
+	cp -f libbz2_dll.a $(PREFIX)/lib
+	chmod a+r $(PREFIX)/lib/libbz2_dll.a
+	sed '/^PATH=/s/:/;/g' < bzgrep > $(PREFIX)/bin/bzgrep
+	$(LN_S) -f $(PREFIX)/bin/bzgrep $(PREFIX)/bin/bzegrep
+	$(LN_S) -f $(PREFIX)/bin/bzgrep $(PREFIX)/bin/bzfgrep
+	chmod a+x $(PREFIX)/bin/bzgrep
+	sed '/^PATH=/s/:/;/g' < bzmore > $(PREFIX)/bin/bzmore
+	$(LN_S) -f $(PREFIX)/bin/bzmore $(PREFIX)/bin/bzless
+	chmod a+x $(PREFIX)/bin/bzmore
+	sed '/^PATH=/s/:/;/g' < bzdiff > $(PREFIX)/bin/bzdiff
+	$(LN_S) -f $(PREFIX)/bin/bzdiff $(PREFIX)/bin/bzcmp
+	chmod a+x $(PREFIX)/bin/bzdiff
+	cp -f bzgrep.1 bzmore.1 bzdiff.1 $(PREFIX)/man/man1
+	chmod a+r $(PREFIX)/man/man1/bzgrep.1
+	chmod a+r $(PREFIX)/man/man1/bzmore.1
+	chmod a+r $(PREFIX)/man/man1/bzdiff.1
+	echo ".so man1/bzgrep.1" > $(PREFIX)/man/man1/bzegrep.1
+	echo ".so man1/bzgrep.1" > $(PREFIX)/man/man1/bzfgrep.1
+	echo ".so man1/bzmore.1" > $(PREFIX)/man/man1/bzless.1
+	echo ".so man1/bzdiff.1" > $(PREFIX)/man/man1/bzcmp.1
+
+clean:
+	rm -f *.o libbz2.a $(BZ2DLL) bzip2$(EXEEXT) bzip2recover$(EXEEXT) \
+	libbz2.exp \
+	sample1.rb2 sample2.rb2 sample3.rb2 \
+	sample1.tst sample2.tst sample3.tst
+
+blocksort.o: blocksort.c
+	@cat words0
+	$(CC) $(CFLAGS) -c blocksort.c
+huffman.o: huffman.c
+	$(CC) $(CFLAGS) -c huffman.c
+crctable.o: crctable.c
+	$(CC) $(CFLAGS) -c crctable.c
+randtable.o: randtable.c
+	$(CC) $(CFLAGS) -c randtable.c
+compress.o: compress.c
+	$(CC) $(CFLAGS) -c compress.c
+decompress.o: decompress.c
+	$(CC) $(CFLAGS) -c decompress.c
+bzlib.o: bzlib.c
+	$(CC) $(CFLAGS) -c bzlib.c
+bzip2.o: bzip2.c
+	$(CC) $(CFLAGS) -c bzip2.c
+bzip2recover.o: bzip2recover.c
+	$(CC) $(CFLAGS) -c bzip2recover.c
+
+
+distclean: clean
+	rm -f manual.ps manual.html manual.pdf
+
+DISTNAME=bzip2-1.0.6
+dist: check manual
+	mkdir $(DISTNAME)
+	cp -p -t $(DISTNAME) \
+	   blocksort.c \
+	   huffman.c \
+	   crctable.c \
+	   randtable.c \
+	   compress.c \
+	   decompress.c \
+	   bzlib.c \
+	   bzip2.c \
+	   bzip2recover.c \
+	   bzlib.h \
+	   bzlib_private.h \
+	   Makefile \
+	   LICENSE \
+	   bzip2.1 \
+	   bzip2.1.preformatted \
+	   bzip2.txt \
+	   words0 \
+	   words1 \
+	   words2 \
+	   words3 \
+	   sample1.ref \
+	   sample2.ref \
+	   sample3.ref \
+	   sample1.bz2 \
+	   sample2.bz2 \
+	   sample3.bz2 \
+	   dlltest.c \
+	   manual.html \
+	   manual.pdf \
+	   manual.ps \
+	   README \
+	   README.COMPILATION.PROBLEMS \
+	   README.XML.STUFF \
+	   CHANGES \
+	   libbz2.def \
+	   libbz2.dsp \
+	   dlltest.dsp \
+	   makefile.msc \
+	   unzcrash.c \
+	   spewG.c \
+	   mk251.c \
+	   bzdiff \
+	   bzdiff.1 \
+	   bzmore \
+	   bzmore.1 \
+	   bzgrep \
+	   bzgrep.1 \
+	   Makefile-libbz2_so \
+	   bz-common.xsl \
+	   bz-fo.xsl \
+	   bz-html.xsl \
+	   bzip.css \
+	   entities.xml \
+	   manual.xml \
+	   format.pl \
+	   xmlproc.sh \
+	   Makefile.klibc
+	
+	zip $(DISTNAME).zip \
+	   $(DISTNAME)/blocksort.c \
+	   $(DISTNAME)/huffman.c \
+	   $(DISTNAME)/crctable.c \
+	   $(DISTNAME)/randtable.c \
+	   $(DISTNAME)/compress.c \
+	   $(DISTNAME)/decompress.c \
+	   $(DISTNAME)/bzlib.c \
+	   $(DISTNAME)/bzip2.c \
+	   $(DISTNAME)/bzip2recover.c \
+	   $(DISTNAME)/bzlib.h \
+	   $(DISTNAME)/bzlib_private.h \
+	   $(DISTNAME)/Makefile \
+	   $(DISTNAME)/LICENSE \
+	   $(DISTNAME)/bzip2.1 \
+	   $(DISTNAME)/bzip2.1.preformatted \
+	   $(DISTNAME)/bzip2.txt \
+	   $(DISTNAME)/words0 \
+	   $(DISTNAME)/words1 \
+	   $(DISTNAME)/words2 \
+	   $(DISTNAME)/words3 \
+	   $(DISTNAME)/sample1.ref \
+	   $(DISTNAME)/sample2.ref \
+	   $(DISTNAME)/sample3.ref \
+	   $(DISTNAME)/sample1.bz2 \
+	   $(DISTNAME)/sample2.bz2 \
+	   $(DISTNAME)/sample3.bz2 \
+	   $(DISTNAME)/dlltest.c \
+	   $(DISTNAME)/manual.html \
+	   $(DISTNAME)/manual.pdf \
+	   $(DISTNAME)/manual.ps \
+	   $(DISTNAME)/README \
+	   $(DISTNAME)/README.COMPILATION.PROBLEMS \
+	   $(DISTNAME)/README.XML.STUFF \
+	   $(DISTNAME)/CHANGES \
+	   $(DISTNAME)/libbz2.def \
+	   $(DISTNAME)/libbz2.dsp \
+	   $(DISTNAME)/dlltest.dsp \
+	   $(DISTNAME)/makefile.msc \
+	   $(DISTNAME)/unzcrash.c \
+	   $(DISTNAME)/spewG.c \
+	   $(DISTNAME)/mk251.c \
+	   $(DISTNAME)/bzdiff \
+	   $(DISTNAME)/bzdiff.1 \
+	   $(DISTNAME)/bzmore \
+	   $(DISTNAME)/bzmore.1 \
+	   $(DISTNAME)/bzgrep \
+	   $(DISTNAME)/bzgrep.1 \
+	   $(DISTNAME)/Makefile-libbz2_so \
+	   $(DISTNAME)/bz-common.xsl \
+	   $(DISTNAME)/bz-fo.xsl \
+	   $(DISTNAME)/bz-html.xsl \
+	   $(DISTNAME)/bzip.css \
+	   $(DISTNAME)/entities.xml \
+	   $(DISTNAME)/manual.xml \
+	   $(DISTNAME)/format.pl \
+	   $(DISTNAME)/xmlproc.sh \
+	   $(DISTNAME)/Makefile.klibc
+	
+	rm -rf $(DISTNAME)
+
+# For rebuilding the manual from sources on my SuSE 9.1 box
+
+MANUAL_SRCS= 	bz-common.xsl bz-fo.xsl bz-html.xsl bzip.css \
+		entities.xml manual.xml
+
+manual: manual.html manual.ps manual.pdf
+
+manual.ps: $(MANUAL_SRCS)
+	./xmlproc.sh -ps manual.xml
+
+manual.pdf: $(MANUAL_SRCS)
+	./xmlproc.sh -pdf manual.xml
+
+manual.html: $(MANUAL_SRCS)
+	./xmlproc.sh -html manual.xml
